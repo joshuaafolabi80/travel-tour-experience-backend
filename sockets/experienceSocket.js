@@ -9,7 +9,6 @@ module.exports = (io) => {
     
     // Experience submitted
     socket.on('experience-submitted', (data) => {
-      // Broadcast to all connected clients
       io.to('experiences-room').emit('new-experience', {
         message: 'A new experience has been shared!',
         experience: data,
@@ -19,10 +18,20 @@ module.exports = (io) => {
     
     // Experience liked
     socket.on('experience-liked', (data) => {
-      // Broadcast to all except the sender
       socket.broadcast.to('experiences-room').emit('experience-like-updated', {
         experienceId: data.experienceId,
         newLikeCount: data.likes,
+        userId: data.userId,
+        liked: data.liked,
+        timestamp: new Date()
+      });
+    });
+    
+    // Experience viewed
+    socket.on('experience-viewed', (data) => {
+      socket.broadcast.to('experiences-room').emit('experience-view-updated', {
+        experienceId: data.experienceId,
+        newViewCount: data.views,
         timestamp: new Date()
       });
     });

@@ -64,6 +64,10 @@ const experienceSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  likedBy: [{
+    type: String, // Store user IDs or emails to track who liked
+    trim: true
+  }],
   views: {
     type: Number,
     default: 0
@@ -71,7 +75,7 @@ const experienceSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
-    default: 'approved'  // Auto-approve for now, you can change to 'pending' for admin review
+    default: 'approved'
   },
   createdAt: {
     type: Date,
@@ -82,5 +86,6 @@ const experienceSchema = new mongoose.Schema({
 // Indexes for better performance
 experienceSchema.index({ type: 1, createdAt: -1 });
 experienceSchema.index({ status: 1, createdAt: -1 });
+experienceSchema.index({ likedBy: 1 }); // For faster like queries
 
 module.exports = mongoose.model('Experience', experienceSchema);

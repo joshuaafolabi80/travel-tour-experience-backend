@@ -57,10 +57,6 @@ router.get('/:id', apiLimiter, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Experience not found' });
     }
     
-    // Increment views
-    experience.views += 1;
-    await experience.save();
-    
     res.json({ success: true, data: experience });
   } catch (error) {
     console.error('Error fetching experience:', error);
@@ -71,12 +67,15 @@ router.get('/:id', apiLimiter, async (req, res) => {
 // POST new experience
 router.post('/', submitLimiter, async (req, res) => {
   try {
-    // Process skillsLearned from comma-separated string to array
+    // Process skillsLearned from string to array
     if (req.body.skillsLearned && typeof req.body.skillsLearned === 'string') {
-      req.body.skillsLearned = req.body.skillsLearned
-        .split(',')
+      // Handle both comma-separated and newline-separated skills
+      const skills = req.body.skillsLearned.split(/[,\n]/)
         .map(skill => skill.trim())
-        .filter(skill => skill.length > 0);
+        .filter(skill => skill.length > 0)
+        .map(skill => skill.replace(/^[•\-\*]\s*/, '')); // Remove bullet points
+        
+      req.body.skillsLearned = skills;
     }
     
     const experience = await Experience.create(req.body);
@@ -98,8 +97,49 @@ router.post('/', submitLimiter, async (req, res) => {
   }
 });
 
-// PUT like an experience
+// PUT like/unlike an experience
 router.put('/:id/like', apiLimiter, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'User ID is required' });
+    }
+    
+    const experience = await Experience.findById(req.params.id);
+    
+    if (!experience) {
+      return res.status(404).json({ success: false, error: 'Experience not found' });
+    }
+    
+    // Check if user already liked this experience
+    const alreadyLiked = experience.likedBy.includes(userId);
+    
+    if (alreadyLiked) {
+      // Unlike: remove user from likedBy and decrement likes
+      experience.likedBy = experience.likedBy.filter(id => id !== userId);
+      experience.likes = Math.max(0, experience.likes - 1);
+    } else {
+      // Like: add user to likedBy and increment likes
+      experience.likedBy.push(userId);
+      experience.likes += 1;
+    }
+    
+    await experience.save();
+    
+    res.json({ 
+      success: true, 
+      likes: experience.likes,
+      liked: !alreadyLiked // true if now liked, false if now unliked
+    });
+  } catch (error) {
+    console.error('Error liking experience:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// PUT increment view count
+router.put('/:id/view', apiLimiter, async (req, res) => {
   try {
     const experience = await Experience.findById(req.params.id);
     
@@ -107,12 +147,30 @@ router.put('/:id/like', apiLimiter, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Experience not found' });
     }
     
-    experience.likes += 1;
+    experience.views += 1;
     await experience.save();
     
-    res.json({ success: true, likes: experience.likes });
+    res.json({ success: true, views: experience.views });
   } catch (error) {
-    console.error('Error liking experience:', error);
+    console.error('Error viewing experience:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// GET check if user liked an experience
+router.get('/:id/liked/:userId', apiLimiter, async (req, res) => {
+  try {
+    const experience = await Experience.findById(req.params.id);
+    
+    if (!experience) {
+      return res.status(404).json({ success: false, error: 'Experience not found' });
+    }
+    
+    const liked = experience.likedBy.includes(req.params.userId);
+    
+    res.json({ success: true, liked });
+  } catch (error) {
+    console.error('Error checking like status:', error);
     res.status(500).json({ success: false, error: 'Server error' });
   }
 });
