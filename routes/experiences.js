@@ -69,11 +69,10 @@ router.post('/', submitLimiter, async (req, res) => {
   try {
     // Process skillsLearned from string to array
     if (req.body.skillsLearned && typeof req.body.skillsLearned === 'string') {
-      // Handle both comma-separated and newline-separated skills
       const skills = req.body.skillsLearned.split(/[,\n]/)
         .map(skill => skill.trim())
         .filter(skill => skill.length > 0)
-        .map(skill => skill.replace(/^[•\-\*]\s*/, '')); // Remove bullet points
+        .map(skill => skill.replace(/^[•\-\*]\s*/, ''));
         
       req.body.skillsLearned = skills;
     }
@@ -130,7 +129,7 @@ router.put('/:id/like', apiLimiter, async (req, res) => {
     res.json({ 
       success: true, 
       likes: experience.likes,
-      liked: !alreadyLiked // true if now liked, false if now unliked
+      liked: !alreadyLiked
     });
   } catch (error) {
     console.error('Error liking experience:', error);
@@ -138,19 +137,36 @@ router.put('/:id/like', apiLimiter, async (req, res) => {
   }
 });
 
-// PUT increment view count
+// PUT increment view count (ONCE PER USER)
 router.put('/:id/view', apiLimiter, async (req, res) => {
   try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'User ID is required to track views' });
+    }
+    
     const experience = await Experience.findById(req.params.id);
     
     if (!experience) {
       return res.status(404).json({ success: false, error: 'Experience not found' });
     }
     
-    experience.views += 1;
-    await experience.save();
+    // Check if user has already viewed this experience
+    const alreadyViewed = experience.viewedBy.includes(userId);
     
-    res.json({ success: true, views: experience.views });
+    if (!alreadyViewed) {
+      // Only increment views and add user to viewedBy if they haven't viewed before
+      experience.views += 1;
+      experience.viewedBy.push(userId);
+      await experience.save();
+    }
+    
+    res.json({ 
+      success: true, 
+      views: experience.views,
+      firstView: !alreadyViewed // true if this was user's first view
+    });
   } catch (error) {
     console.error('Error viewing experience:', error);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -171,6 +187,24 @@ router.get('/:id/liked/:userId', apiLimiter, async (req, res) => {
     res.json({ success: true, liked });
   } catch (error) {
     console.error('Error checking like status:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// GET check if user viewed an experience
+router.get('/:id/viewed/:userId', apiLimiter, async (req, res) => {
+  try {
+    const experience = await Experience.findById(req.params.id);
+    
+    if (!experience) {
+      return res.status(404).json({ success: false, error: 'Experience not found' });
+    }
+    
+    const viewed = experience.viewedBy.includes(req.params.userId);
+    
+    res.json({ success: true, viewed });
+  } catch (error) {
+    console.error('Error checking view status:', error);
     res.status(500).json({ success: false, error: 'Server error' });
   }
 });
